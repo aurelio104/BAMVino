@@ -195,7 +195,7 @@ document.addEventListener("DOMContentLoaded", () => {
   function ensureNodes() {
     if (videoNode) return;
 
-    const VIDEO_WIDTH = 2.0;                 // en metros
+    const VIDEO_WIDTH = 3.0;                 // en metros
     const VIDEO_HEIGHT = VIDEO_WIDTH / videoAspect;
 
     // Video (encima)
