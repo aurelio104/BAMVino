@@ -1,3 +1,86 @@
+/* --- Componente: sticky-follow ---------------------------------------------------
+   Sigue la pose del anchor mientras haya tracking; cuando se pierde el marcador,
+   congela la última pose y mantiene visible durante holdMs, luego oculta.
+----------------------------------------------------------------------------------- */
+AFRAME.registerComponent('sticky-follow', {
+  schema: {
+    source: { type: 'selector' }, // anchor <a-entity mindar-image-target>
+    pos: { default: 0.15 },       // suavizado posición (0..1, mayor = más suave)
+    rot: { default: 0.20 },       // suavizado rotación
+    scl: { default: 0.15 },       // suavizado escala
+    holdMs: { default: 10000 }    // ms visibles tras perder el marcador
+  },
+  init() {
+    this.tracking = false;
+    this.hideTimeout = null;
+
+    this.tPos = new THREE.Vector3();
+    this.tQuat = new THREE.Quaternion();
+    this.tScl = new THREE.Vector3(1,1,1);
+
+    this.curPos = new THREE.Vector3();
+    this.curQuat = new THREE.Quaternion();
+    this.curScl = new THREE.Vector3(1,1,1);
+
+    this.tmpM = new THREE.Matrix4();
+
+    const anchor = this.data.source;
+    if (!anchor) return;
+
+    // Eventos del anchor MindAR
+    this._onFound = () => {
+      this.tracking = true;
+      if (this.hideTimeout) { clearTimeout(this.hideTimeout); this.hideTimeout = null; }
+      this.el.setAttribute('visible', 'true'); // asegurar visible al encontrar
+    };
+    this._onLost = () => {
+      this.tracking = false;
+      // Mantener visible durante holdMs y luego ocultar
+      if (this.hideTimeout) clearTimeout(this.hideTimeout);
+      this.hideTimeout = setTimeout(() => {
+        this.el.setAttribute('visible', 'false');
+      }, this.data.holdMs);
+    };
+
+    anchor.addEventListener('targetFound', this._onFound);
+    anchor.addEventListener('targetLost',  this._onLost);
+  },
+  remove(){
+    const anchor = this.data.source;
+    if (!anchor) return;
+    if (this._onFound) anchor.removeEventListener('targetFound', this._onFound);
+    if (this._onLost)  anchor.removeEventListener('targetLost',  this._onLost);
+  },
+  tick(t, dt) {
+    const anchor = this.data.source;
+    if (!anchor) return;
+    // Si hay tracking, copiamos pose world del anchor (con suavizado)
+    if (this.tracking) {
+      anchor.object3D.updateWorldMatrix(true, false);
+      this.tmpM.copy(anchor.object3D.matrixWorld);
+      this.tmpM.decompose(this.tPos, this.tQuat, this.tScl);
+
+      const base = Math.max(dt || 16.666, 16.666);
+      const kPos = 1 - Math.pow(1 - this.data.pos, base / 16.666);
+      const kRot = 1 - Math.pow(1 - this.data.rot, base / 16.666);
+      const kScl = 1 - Math.pow(1 - this.data.scl, base / 16.666);
+
+      const o = this.el.object3D;
+      o.position.lerp(this.tPos, kPos);
+      o.quaternion.slerp(this.tQuat, kRot);
+      this.curScl.lerp(this.tScl, kScl);
+      o.scale.copy(this.curScl);
+
+      // Guardar actuales (por si se pierde justo en este frame)
+      this.curPos.copy(o.position);
+      this.curQuat.copy(o.quaternion);
+    }
+    // Si NO hay tracking, mantenemos la última pose (o sea: congelado)
+    // (Ya quedó con la última transform; no hacemos nada más aquí)
+  }
+});
+
+
 document.addEventListener("DOMContentLoaded", () => {
   const scene = document.querySelector("a-scene");
   const markerInfo = document.getElementById("marker-info");
@@ -8,11 +91,8 @@ document.addEventListener("DOMContentLoaded", () => {
   const imgAsset = document.getElementById("ar-img");
 
   const TOTAL_MARCADORES = 1;
-
-  // Config lectura
-  const HOLD_MS = 10000;      // tiempo visible tras perder el marcador
-  const READ_DIST = 0.9;      // distancia al centrar frente a cámara (m)
-  const BASE_WIDTH = 5.0;     // ancho del PNG sobre el marcador (m)
+  const HOLD_MS = 10000;   // <- tiempo que se mantiene visible tras perder el marcador
+  const PLANE_WIDTH = 5.0; // tu tamaño actual (ajústalo si lo necesitas)
 
   let experienciaIniciada = false;
   let arAspect = 1; // width/height del PNG (se calcula al cargar)
@@ -32,158 +112,65 @@ document.addEventListener("DOMContentLoaded", () => {
   if (imgAsset?.complete) computeAspect();
   else if (imgAsset) imgAsset.onload = computeAspect;
 
-  // Error MindAR
-  scene.addEventListener("arError", () => { if (camError) camError.style.display = "block"; });
+  // Eventos MindAR para mostrar error real de cámara (sin cambiar tu flujo)
+  scene.addEventListener("arError", () => {
+    if (camError) camError.style.display = "block";
+  });
 
-  // Iniciar experiencia
+  // Al presionar "Iniciar experiencia"
   startBtn.addEventListener("click", () => {
     experienciaIniciada = true;
     startBtn.style.display = "none";
-    try { clickSound?.play?.(); } catch {}
+    if (clickSound) clickSound.play().catch(() => {});
   });
 
-  // ====== Estado hold & gestos ======
-  let hideTimeout = null;
-  let readingMode = false;  // true durante el hold (centrado frente a cámara)
-  let activePlane = null;   // a-plane visible
-  let lastTouch = null;
-  let pinchStartDist = 0;
-  let scaleAtPinchStart = 1;
-
-  function enableGestures(plane){
-    if (activePlane === plane && readingMode) return;
-    activePlane = plane;
-    readingMode = true;
-    window.addEventListener("touchstart", onTouchStart, {passive:false});
-    window.addEventListener("touchmove", onTouchMove, {passive:false});
-    window.addEventListener("touchend", onTouchEnd, {passive:false});
-    window.addEventListener("touchcancel", onTouchEnd, {passive:false});
-  }
-  function disableGestures(){
-    readingMode = false;
-    activePlane = null;
-    window.removeEventListener("touchstart", onTouchStart);
-    window.removeEventListener("touchmove", onTouchMove);
-    window.removeEventListener("touchend", onTouchEnd);
-    window.removeEventListener("touchcancel", onTouchEnd);
-    lastTouch = null; pinchStartDist = 0;
-  }
-  function onTouchStart(evt){
-    if (!readingMode || !activePlane) return;
-    const t = evt.touches;
-    if (t.length === 2){
-      evt.preventDefault();
-      pinchStartDist = Math.hypot(t[0].clientX - t[1].clientX, t[0].clientY - t[1].clientY);
-      scaleAtPinchStart = activePlane.object3D.scale.x || 1;
-      lastTouch = null;
-    } else if (t.length === 1){
-      evt.preventDefault();
-      lastTouch = { x: t[0].clientX, y: t[0].clientY };
-    }
-  }
-  function onTouchMove(evt){
-    if (!readingMode || !activePlane) return;
-    const t = evt.touches;
-    if (t.length === 2 && pinchStartDist > 0){
-      evt.preventDefault();
-      const d = Math.hypot(t[0].clientX - t[1].clientX, t[0].clientY - t[1].clientY);
-      let s = scaleAtPinchStart * (d / pinchStartDist);
-      s = Math.max(0.3, Math.min(6.0, s)); // límites
-      activePlane.object3D.scale.set(s, s, s);
-    } else if (t.length === 1 && lastTouch){
-      evt.preventDefault();
-      const dx = t[0].clientX - lastTouch.x;
-      const dy = t[0].clientY - lastTouch.y;
-      lastTouch = { x: t[0].clientX, y: t[0].clientY };
-      const k = 0.002 * (activePlane.object3D.scale.x || 1);
-      activePlane.object3D.position.x += dx * k;
-      activePlane.object3D.position.y += -dy * k;
-    }
-  }
-  function onTouchEnd(evt){
-    const len = evt.touches ? evt.touches.length : 0;
-    if (len < 2) pinchStartDist = 0;
-    if (len === 0) lastTouch = null;
-  }
-
-  // Centrar contenido frente a la cámara (una sola vez al entrar en lectura)
-  function centerForReading(contentRoot){
-    const cam = document.querySelector('a-entity[mindar-camera] a-camera') || document.querySelector('a-camera');
-    if (!cam) return;
-    const camObj = cam.object3D;
-    camObj.updateWorldMatrix(true, false);
-
-    // Posición de cámara y dirección de mirada
-    const camPos = new THREE.Vector3();
-    const dir = new THREE.Vector3();
-    camObj.getWorldPosition(camPos);
-    camObj.getWorldDirection(dir); // apunta hacia -Z del mundo de la cam
-
-    // Posición objetivo = delante de la cámara
-    const targetPos = camPos.clone().add(dir.multiplyScalar(READ_DIST));
-    const o = contentRoot.object3D;
-    o.position.copy(targetPos);
-
-    // Orientar para que mire a la cámara (billboard)
-    o.lookAt(camPos);
-  }
-
-  // Crear targets (0..TOTAL_MARCADORES-1)
+  // Construcción de anchors y contenidos sticky
   for (let i = 0; i < TOTAL_MARCADORES; i++) {
-    // Anchor de MindAR
+    // Anchor (MindAR) - solo tracking; NO meteremos el plano como hijo
     const anchor = document.createElement("a-entity");
+    anchor.setAttribute("id", `anchor-${i}`);
     anchor.setAttribute("mindar-image-target", `targetIndex: ${i}`);
     scene.appendChild(anchor);
 
-    // Contenedor independiente (así podemos mantenerlo sin anchor)
+    // Contenedor del contenido (sigue al anchor mientras haya tracking)
     const content = document.createElement("a-entity");
-    content.setAttribute("visible", "false");
+    content.setAttribute(
+      "sticky-follow",
+      `source: #anchor-${i}; pos: 0.15; rot: 0.20; scl: 0.15; holdMs: ${HOLD_MS}`
+    );
+    content.setAttribute("visible", "false"); // se mostrará al targetFound
     scene.appendChild(content);
 
-    let plane = null;
+    // Plano con PNG (hijo de content, NO del anchor)
+    const plane = document.createElement("a-plane");
 
+    const height = PLANE_WIDTH / arAspect;  // respeta aspect-ratio
+    plane.setAttribute("width", PLANE_WIDTH.toString());
+    plane.setAttribute("height", height.toString());
+    plane.setAttribute("position", "0 0 0.01"); // evita z-fighting
+    plane.setAttribute("rotation", "0 0 0");
+
+    // Material iluminado (resalta letras)
+    plane.setAttribute(
+      "material",
+      "shader: standard; src: #ar-img; transparent: true; alphaTest: 0.01; side: double; metalness: 0; roughness: 1; emissive: #ffffff; emissiveIntensity: 0.7"
+    );
+
+    plane.setAttribute("shadow", "cast: true; receive: false");
+
+    // Animación suave (pop-in)
+    plane.setAttribute("visible", "false");
+    plane.setAttribute("animation__in", "property: scale; to: 1 1 1; dur: 220; easing: easeOutBack; startEvents: show");
+    plane.setAttribute("animation__out", "property: scale; to: 0.96 0.96 0.96; dur: 160; easing: easeInQuad; startEvents: hide");
+    plane.object3D.scale.set(0.96, 0.96, 0.96);
+
+    content.appendChild(plane);
+
+    // HUD y show/hide coordinado
     anchor.addEventListener("targetFound", () => {
       if (!experienciaIniciada) return;
       console.log(`✅ Marcador detectado: targetIndex = ${i}`);
       if (markerInfo) markerInfo.innerText = `Marcador: ${i}`;
-
-      // Cancelar modo lectura si estaba activo
-      if (hideTimeout) { clearTimeout(hideTimeout); hideTimeout = null; }
-      disableGestures();
-
-      // Si no existe el plano, créalo
-      if (!plane) {
-        plane = document.createElement("a-plane");
-
-        // Tamaño
-        const width = BASE_WIDTH;
-        const height = width / arAspect;
-
-        plane.setAttribute("width", width.toString());
-        plane.setAttribute("height", height.toString());
-        plane.setAttribute("position", "0 0 0.01");
-        plane.setAttribute("rotation", "0 0 0");
-
-        // Material iluminado (letras potentes)
-        plane.setAttribute(
-          "material",
-          "shader: standard; src: #ar-img; transparent: true; alphaTest: 0.01; side: double; metalness: 0; roughness: 1; emissive: #ffffff; emissiveIntensity: 0.7"
-        );
-        plane.setAttribute("shadow", "cast: true; receive: false");
-
-        // Animación
-        plane.setAttribute("visible", "false");
-        plane.setAttribute("animation__in", "property: scale; to: 1 1 1; dur: 220; easing: easeOutBack; startEvents: show");
-        plane.setAttribute("animation__out", "property: scale; to: 0.96 0.96 0.96; dur: 160; easing: easeInQuad; startEvents: hide");
-        plane.object3D.scale.set(0.96, 0.96, 0.96);
-
-        content.appendChild(plane);
-      }
-
-      // Copiar la pose del anchor al content (pegado al marcador)
-      anchor.object3D.updateWorldMatrix(true,false);
-      content.object3D.matrix.copy(anchor.object3D.matrixWorld);
-      content.object3D.matrix.decompose(content.object3D.position, content.object3D.quaternion, content.object3D.scale);
 
       content.setAttribute("visible", "true");
       plane.setAttribute("visible", "true");
@@ -192,23 +179,13 @@ document.addEventListener("DOMContentLoaded", () => {
 
     anchor.addEventListener("targetLost", () => {
       if (markerInfo) markerInfo.innerText = `Marcador: ---`;
-      if (!plane) return;
-
-      // Entrar a modo lectura: centrar frente a cámara + activar gestos
-      centerForReading(content);
-      enableGestures(plane);
-
-      // Pequeño pop-out y mantener visible
+      // No ocultamos aquí: lo hará el componente después de HOLD_MS
+      // Solo un pequeño “pop-out” visual si quieres
       plane.emit("hide");
-      setTimeout(() => { plane.setAttribute("visible", "true"); }, 140);
-
-      // Temporizador para ocultar si no vuelve el marcador
-      if (hideTimeout) clearTimeout(hideTimeout);
-      hideTimeout = setTimeout(() => {
-        content.setAttribute("visible", "false");
-        disableGestures();
-        hideTimeout = null;
-      }, HOLD_MS);
+      setTimeout(() => {
+        // mantenemos visible (content/plane) hasta que sticky-follow lo oculte
+        plane.setAttribute("visible", "true");
+      }, 140);
     });
   }
 });
