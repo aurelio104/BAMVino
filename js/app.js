@@ -57,7 +57,7 @@ document.addEventListener("DOMContentLoaded", () => {
         plane = document.createElement("a-plane");
 
         // Tamaño: ajusta el ancho a tu gusto; alto mantiene el aspecto del PNG
-        const width = 6.0;                // en metros sobre el marcador
+        const width = 2.0;                // en metros sobre el marcador
         const height = width / arAspect;  // respeta aspect-ratio
 
         plane.setAttribute("width", width.toString());
