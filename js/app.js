@@ -40,7 +40,7 @@ document.addEventListener("DOMContentLoaded", () => {
     if (clickSound) clickSound.play().catch(() => {});
   });
 
-  // Crear targets (0..21) que muestran el PNG
+  // Crear targets (0..TOTAL_MARCADORES-1) que muestran el PNG
   for (let i = 0; i < TOTAL_MARCADORES; i++) {
     const target = document.createElement("a-entity");
     target.setAttribute("mindar-image-target", `targetIndex: ${i}`);
@@ -64,10 +64,13 @@ document.addEventListener("DOMContentLoaded", () => {
         plane.setAttribute("height", height.toString());
         plane.setAttribute("position", "0 0 0.01"); // evita z-fighting
         plane.setAttribute("rotation", "0 0 0");
+
+        // 🔆 Material iluminado (más brillo en letras)
         plane.setAttribute(
           "material",
-          "src: #ar-img; transparent: true; alphaTest: 0.01; side: double"
+          "shader: standard; src: #ar-img; transparent: true; alphaTest: 0.01; side: double; metalness: 0; roughness: 1; emissive: #ffffff; emissiveIntensity: 0.7"
         );
+
         plane.setAttribute("shadow", "cast: true; receive: false");
 
         // Animación suave (pop-in)
