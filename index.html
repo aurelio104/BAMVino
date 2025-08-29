@@ -45,7 +45,7 @@
   <!-- HUD para ver qué marcador fue detectado -->
   <div id="marker-info">Marcador: ---</div>
 
-  <!-- Overlay para reactivar sonido (compatibilidad) -->
+  <!-- Overlay para reactivar sonido si iOS bloquea autoplay con audio -->
   <div id="reactivar-sonido" style="display: none;">
     🔊 Toca aquí para reactivar sonido
   </div>
@@ -64,34 +64,37 @@
     shadow="type: pcfsoft"
   >
     <a-assets>
-      <!-- PNG con transparencia -->
-      <img id="ar-img" src="assets/images/AR_WS.png" crossorigin="anonymous" />
+      <!-- ⚠️ OJO: nombres con espacio → usa %20 para evitar 404 -->
+      <video
+        id="ar-video"
+        src="assets/images/B%20WAX%20SEAL%20RENDER.mp4"
+        preload="auto"
+        playsinline
+        webkit-playsinline
+        crossorigin="anonymous"
+        style="display:none"
+      ></video>
+
+      <img
+        id="logo-img"
+        src="assets/images/B%20WAX%20SEAL%20RENDER.png"
+        crossorigin="anonymous"
+      />
     </a-assets>
 
-    <!-- ===================== CÁMARA + LUZ QUE SIGUE A LA CÁMARA ===================== -->
+    <!-- Cámara + (opcional) luz que sigue a cámara -->
     <a-entity mindar-camera>
       <a-camera position="0 0 0" look-controls="enabled: false">
-        <!-- Luz puntual fuerte que siempre ilumina el plano desde la cámara -->
         <a-entity
-          light="type: point; color: #ffffff; intensity: 3.5; distance: 15; decay: 2"
+          light="type: point; color: #ffffff; intensity: 2.5; distance: 10; decay: 2"
           position="0 0 0"
         ></a-entity>
       </a-camera>
     </a-entity>
 
-    <!-- ===================== ILUMINACIÓN GLOBAL (resalta letras) ===================== -->
-    <!-- Luz hemisférica: relleno superior/inferior para evitar zonas apagadas -->
-    <a-entity light="type: hemisphere; color: #ffffff; groundColor: #808080; intensity: 1.2"></a-entity>
-
-    <!-- Luz ambiente suave: levanta el nivel base general -->
+    <!-- Iluminación base (el video no la necesita, pero el logo sí puede verse mejor) -->
     <a-entity light="type: ambient; intensity: 0.6"></a-entity>
-
-    <!-- Direccional potente: aporta contraste y “snap” visual a bordes -->
-    <a-entity
-      light="type: directional; color: #ffffff; intensity: 3.0"
-      position="1 2 1"
-      shadow="cast: true"
-    ></a-entity>
+    <a-entity light="type: hemisphere; color: #ffffff; groundColor: #808080; intensity: 1.0"></a-entity>
   </a-scene>
 </body>
 </html>
