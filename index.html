@@ -4,58 +4,33 @@
   <meta charset="UTF-8" />
   <title>Boisset WebAR</title>
 
-  <!-- Viewport optimizado para iOS (safe areas) -->
-  <meta
-    name="viewport"
-    content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover"
-  />
-
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover" />
   <meta name="theme-color" content="#000000" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
   <link rel="icon" href="data:," />
-
-  <!-- CSS -->
   <link rel="stylesheet" href="css/style.css" />
 
-  <!-- A-Frame & MindAR -->
   <script src="https://aframe.io/releases/1.5.0/aframe.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/mind-ar@1.2.5/dist/mindar-image-aframe.prod.js"></script>
 
-  <!-- Tu JS -->
   <script src="js/app.js" defer></script>
 </head>
 <body>
-  <!-- Mensaje si no hay cámara -->
-  <div id="cam-error" style="display:none;">
-    🚫 No se pudo acceder a la cámara. Revisa los permisos en tu navegador.
-  </div>
+  <div id="cam-error" style="display:none;">🚫 No se pudo acceder a la cámara. Revisa los permisos en tu navegador.</div>
 
-  <!-- Loader animado estilo iOS -->
   <div id="loader">
     <div class="spinner"></div>
     <div class="loader-text">Cargando experiencia...</div>
   </div>
 
-  <!-- Botón central para iniciar experiencia -->
-  <div id="start-experience">
-    🚀 Iniciar experiencia
-  </div>
-
-  <!-- HUD para ver qué marcador fue detectado -->
+  <div id="start-experience">🚀 Iniciar experiencia</div>
   <div id="marker-info">Marcador: ---</div>
-
-  <!-- Overlay para reactivar sonido si iOS bloquea autoplay con audio -->
-  <div id="reactivar-sonido" style="display: none;">
-    🔊 Toca aquí para reactivar sonido
-  </div>
-
-  <!-- Sonido de clic al presionar el botón -->
+  <div id="reactivar-sonido" style="display:none;">🔊 Toca aquí para reactivar sonido</div>
   <audio id="click-sound" src="assets/click.mp3" preload="auto"></audio>
 
-  <!-- Escena WebAR -->
   <a-scene
-    mindar-image="imageTargetSrc: assets/targets.mind; filterMinCF: 0.0005; filterBeta: 10; warmupTolerance: 3; missTolerance: 6; uiLoading: false; uiScanning: false; uiError: false"
+    mindar-image="imageTargetSrc: assets/targets.mind; filterMinCF: 0.0003; filterBeta: 5; warmupTolerance: 3; missTolerance: 8; uiLoading: false; uiScanning: false; uiError: false"
     embedded
     color-space="sRGB"
     renderer="antialias: true; alpha: true; physicallyCorrectLights: true"
@@ -64,35 +39,25 @@
     shadow="type: pcfsoft"
   >
     <a-assets>
-      <!-- ⚠️ OJO: nombres con espacio → usa %20 para evitar 404 -->
-      <video
-        id="ar-video"
+      <!-- OJO: espacios en nombres → %20 -->
+      <video id="ar-video"
         src="assets/images/B%20WAX%20SEAL%20RENDER.mp4"
-        preload="auto"
-        playsinline
-        webkit-playsinline
-        crossorigin="anonymous"
-        style="display:none"
-      ></video>
+        preload="auto" playsinline webkit-playsinline crossorigin="anonymous" style="display:none"></video>
 
-      <img
-        id="logo-img"
-        src="assets/images/B%20WAX%20SEAL%20RENDER.png"
-        crossorigin="anonymous"
-      />
+      <img id="logo-img" src="assets/images/B%20WAX%20SEAL%20RENDER.png" crossorigin="anonymous" />
     </a-assets>
 
-    <!-- Cámara + (opcional) luz que sigue a cámara -->
+    <!-- Anchor (tracker) -->
+    <a-entity id="anchor-0" mindar-image-target="targetIndex: 0"></a-entity>
+
+    <!-- Cámara + luz para el logo -->
     <a-entity mindar-camera>
       <a-camera position="0 0 0" look-controls="enabled: false">
-        <a-entity
-          light="type: point; color: #ffffff; intensity: 2.5; distance: 10; decay: 2"
-          position="0 0 0"
-        ></a-entity>
+        <a-entity light="type: point; color: #ffffff; intensity: 2.5; distance: 10; decay: 2" position="0 0 0"></a-entity>
       </a-camera>
     </a-entity>
 
-    <!-- Iluminación base (el video no la necesita, pero el logo sí puede verse mejor) -->
+    <!-- Iluminación base -->
     <a-entity light="type: ambient; intensity: 0.6"></a-entity>
     <a-entity light="type: hemisphere; color: #ffffff; groundColor: #808080; intensity: 1.0"></a-entity>
   </a-scene>
