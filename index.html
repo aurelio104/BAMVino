@@ -54,16 +54,15 @@
   <audio id="click-sound" src="assets/click.mp3" preload="auto"></audio>
 
   <!-- Escena WebAR -->
-<a-scene
-  mindar-image="imageTargetSrc: assets/targets.mind; filterMinCF: 0.0003; filterBeta: 5; warmupTolerance: 3; missTolerance: 8; uiLoading: false; uiScanning: false; uiError: false"
-  embedded
-  color-space="sRGB"
-  renderer="antialias: true; alpha: true; physicallyCorrectLights: true"
-  vr-mode-ui="enabled: false"
-  device-orientation-permission-ui="enabled: false"
-  shadow="type: pcfsoft"
->
-
+  <a-scene
+    mindar-image="imageTargetSrc: assets/targets.mind; filterMinCF: 0.0005; filterBeta: 10; warmupTolerance: 3; missTolerance: 6; uiLoading: false; uiScanning: false; uiError: false"
+    embedded
+    color-space="sRGB"
+    renderer="antialias: true; alpha: true; physicallyCorrectLights: true"
+    vr-mode-ui="enabled: false"
+    device-orientation-permission-ui="enabled: false"
+    shadow="type: pcfsoft"
+  >
     <a-assets>
       <!-- ⚠️ OJO: nombres con espacio → usa %20 para evitar 404 -->
       <video
