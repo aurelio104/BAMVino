@@ -5,10 +5,7 @@
   <title>Boisset WebAR</title>
 
   <!-- Viewport optimizado para iOS (safe areas) -->
-  <meta
-    name="viewport"
-    content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover"
-  />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover"/>
 
   <meta name="theme-color" content="#000000" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
@@ -31,26 +28,22 @@
     🚫 No se pudo acceder a la cámara. Revisa los permisos en tu navegador.
   </div>
 
-  <!-- Loader animado estilo iOS -->
+  <!-- Loader -->
   <div id="loader">
     <div class="spinner"></div>
     <div class="loader-text">Cargando experiencia...</div>
   </div>
 
   <!-- Botón central para iniciar experiencia -->
-  <div id="start-experience">
-    🚀 Iniciar experiencia
-  </div>
+  <div id="start-experience">🚀 Iniciar experiencia</div>
 
-  <!-- HUD para ver qué marcador fue detectado -->
+  <!-- HUD -->
   <div id="marker-info">Marcador: ---</div>
 
-  <!-- Overlay para reactivar sonido si iOS bloquea autoplay con audio -->
-  <div id="reactivar-sonido" style="display: none;">
-    🔊 Toca aquí para Activar
-  </div>
+  <!-- Overlay para reactivar sonido -->
+  <div id="reactivar-sonido" style="display:none;">🔊 Toca aquí para Activar</div>
 
-  <!-- Sonido de clic al presionar el botón -->
+  <!-- Sonido de clic -->
   <audio id="click-sound" src="assets/click.mp3" preload="auto"></audio>
 
   <!-- Escena WebAR -->
@@ -64,7 +57,7 @@
     shadow="type: pcfsoft"
   >
     <a-assets>
-      <!-- ⚠️ OJO: nombres con espacio → usa %20 -->
+      <!-- OJO: nombres con espacio → %20 -->
       <video
         id="ar-video"
         src="assets/images/B%20WAX%20SEAL%20RENDER.mp4"
@@ -82,10 +75,10 @@
       />
     </a-assets>
 
-    <!-- Anchor (tracker) -->
+    <!-- Anchor del marcador -->
     <a-entity id="anchor-0" mindar-image-target="targetIndex: 0"></a-entity>
 
-    <!-- Cámara + (opcional) luz que sigue a cámara para el logo -->
+    <!-- Cámara + luz (para realzar logo si lo dejas plano) -->
     <a-entity mindar-camera>
       <a-camera position="0 0 0" look-controls="enabled: false">
         <a-entity
@@ -95,7 +88,7 @@
       </a-camera>
     </a-entity>
 
-    <!-- Iluminación base (el video no la necesita, el logo sí puede verse mejor) -->
+    <!-- Iluminación base -->
     <a-entity light="type: ambient; intensity: 0.6"></a-entity>
     <a-entity light="type: hemisphere; color: #ffffff; groundColor: #808080; intensity: 1.0"></a-entity>
   </a-scene>

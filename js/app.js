@@ -1,12 +1,10 @@
-/* ------- Suavizado con “snap” + billboard para mantenerlo de frente ------- */
+/* ====== Suavizado que SIGUE exactamente la rotación del marcador (sin billboard) ====== */
 AFRAME.registerComponent('smooth-follow', {
   schema: {
-    source: { type: 'selector' }, // #anchor-0
-    pos: { default: 0.22 },       // suavizado posición (0..1)
-    rot: { default: 0.30 },       // suavizado rotación (0..1)
-    scl: { default: 0.22 },       // suavizado escala   (0..1)
-    faceCamera: { default: true },// billboard: mirar a la cámara
-    lockRoll: { default: true }   // ignorar “roll” (estabiliza el horizonte)
+    source: { type: 'selector' }, // p.ej. #anchor-0
+    pos:   { default: 0.25 },     // suavizado posición (0..1)
+    rot:   { default: 0.35 },     // suavizado rotación (0..1)
+    scl:   { default: 0.25 }      // suavizado escala   (0..1)
   },
   init() {
     this._m = new THREE.Matrix4();
@@ -14,52 +12,23 @@ AFRAME.registerComponent('smooth-follow', {
     this._quat = new THREE.Quaternion();
     this._scl = new THREE.Vector3(1,1,1);
     this._curScl = new THREE.Vector3(1,1,1);
-
-    this._snapDone = false;
-
-    // para billboard
-    this._camPos = new THREE.Vector3();
-    this._desiredQuat = new THREE.Quaternion();
-    this._tmpObj = new THREE.Object3D();
-    this._euler = new THREE.Euler(0,0,0,'YXZ');
+    this._snapped = false;
   },
   tick(t, dt) {
     const src = this.data.source; if (!src) return;
-    const scene = this.el.sceneEl;
-    const cam = scene && scene.camera;
 
-    // Tomamos pose del anchor (solo posición y scale si faceCamera)
+    // Pose world del anchor
     src.object3D.updateWorldMatrix(true, false);
     this._m.copy(src.object3D.matrixWorld).decompose(this._pos, this._quat, this._scl);
 
-    // Primer frame tras targetFound: “snap” (sin inercia) → garantía de que se vea al instante
-    if (!this._snapDone && src.object3D.visible) {
+    // Snap inicial (garantiza visibilidad instantánea)
+    if (!this._snapped && src.object3D.visible) {
       const o = this.el.object3D;
       o.position.copy(this._pos);
+      o.quaternion.copy(this._quat);
       o.scale.copy(this._scl);
-
-      if (this.data.faceCamera && cam) {
-        // billboard: mirar a la cámara (sin roll)
-        cam.getWorldPosition(this._camPos);
-        this._tmpObj.position.copy(o.position);
-        this._tmpObj.lookAt(this._camPos);
-        // lock roll
-        if (this.data.lockRoll) {
-          this._tmpObj.getWorldQuaternion(this._desiredQuat);
-          this._euler.setFromQuaternion(this._desiredQuat);
-          this._euler.z = 0; // quita roll
-          this._desiredQuat.setFromEuler(this._euler);
-          o.quaternion.copy(this._desiredQuat);
-        } else {
-          o.lookAt(this._camPos);
-        }
-      } else {
-        // sin billboard: hereda rotación del marker
-        o.quaternion.copy(this._quat);
-      }
-
       this._curScl.copy(this._scl);
-      this._snapDone = true;
+      this._snapped = true;
       return;
     }
 
@@ -70,33 +39,12 @@ AFRAME.registerComponent('smooth-follow', {
     const kScl = 1 - Math.pow(1 - this.data.scl, base / 16.666);
 
     const o = this.el.object3D;
-
-    // Posición y escala suavizadas desde el anchor
     o.position.lerp(this._pos, kPos);
+    o.quaternion.slerp(this._quat, kRot);
     this._curScl.lerp(this._scl, kScl);
     o.scale.copy(this._curScl);
-
-    // Rotación: billboard (mirar cámara) o heredar marker suavizado
-    if (this.data.faceCamera && cam) {
-      cam.getWorldPosition(this._camPos);
-      // Calculamos orientación deseada que mira a cámara
-      this._tmpObj.position.copy(o.position);
-      this._tmpObj.lookAt(this._camPos);
-      if (this.data.lockRoll) {
-        this._tmpObj.getWorldQuaternion(this._desiredQuat);
-        this._euler.setFromQuaternion(this._desiredQuat);
-        this._euler.z = 0; // quita roll
-        this._desiredQuat.setFromEuler(this._euler);
-      } else {
-        this._desiredQuat.copy(this._tmpObj.quaternion);
-      }
-      o.quaternion.slerp(this._desiredQuat, kRot);
-    } else {
-      // hereda rotación del marker
-      o.quaternion.slerp(this._quat, kRot);
-    }
   },
-  resetSnap() { this._snapDone = false; }
+  resetSnap() { this._snapped = false; }
 });
 
 
@@ -119,15 +67,14 @@ document.addEventListener("DOMContentLoaded", () => {
 
   // Aspect ratios fallback
   let videoAspect = 16 / 9;
-  let logoAspect = 1;
+  let logoAspect  = 1;
 
-  // UI inicial
+  // === UI inicial
   window.addEventListener("load", () => {
-    if (loader) loader.style.display = "none";
-    if (startBtn) startBtn.style.display = "block";
+    loader.style.display = "none";
+    startBtn.style.display = "block";
   });
 
-  // iOS autoplay-safe
   startBtn.addEventListener("click", () => {
     experienciaIniciada = true;
     soundEnabled = true;
@@ -137,7 +84,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
   // Errores MindAR
   scene.addEventListener("arError", () => {
-    if (camError) camError.style.display = "block";
+    camError.style.display = "block";
   });
 
   // Aspect del video/ logo reales
@@ -154,7 +101,7 @@ document.addEventListener("DOMContentLoaded", () => {
     };
   }
 
-  // Intentar reproducir video con/ sin sonido
+  // iOS autoplay-safe
   function intentarReproducirVideo() {
     if (!videoEl) return;
     videoEl.muted = !soundEnabled; // primero en mute si no hubo gesto
@@ -179,49 +126,61 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   }
 
-  // ===== Contenedor “content” con billboard + suavizado =====
+  // ===== Contenedor que SIGUE al anchor con suavizado (rotación idéntica) =====
   const content = document.createElement("a-entity");
-  content.setAttribute(
-    "smooth-follow",
-    "source: #anchor-0; pos: 0.22; rot: 0.30; scl: 0.22; faceCamera: true; lockRoll: true"
-  );
+  content.setAttribute("smooth-follow", "source: #anchor-0; pos: 0.25; rot: 0.35; scl: 0.25");
   content.setAttribute("visible", "false");
   scene.appendChild(content);
 
   // Nodos del contenido
-  let videoNode = null;
-  let logoNode  = null;
+  let videoNode = null; // cilindro curvo
+  let logoNode  = null; // logo plano debajo
+
+  // ===== Parámetros del vídeo CURVO sobre botella =====
+  // Elegimos el ARCO visible del video (en grados) y su LONGITUD (en "unidades A-Frame").
+  // NOTA: estas "unidades" deben ser consistentes con lo que venías usando (antes width=2.0/3.0).
+  const ARC_DEG      = 100;     // arco visible (p.ej. 80–120)
+  const ARC_LENGTH   = 2.0;     // "ancho" del contenido a lo largo del arco, en tus unidades de escena
+  // Con eso el radio se calcula como: r = s / theta(rad)
+  const THETA_RAD    = ARC_DEG * Math.PI / 180;
+  let   bottleRadius = (ARC_LENGTH / THETA_RAD); // radio consistente con tu escala de escena
 
   function ensureNodes() {
     if (videoNode) return;
 
-    const VIDEO_WIDTH = 2.0;                 // en metros
-    const VIDEO_HEIGHT = VIDEO_WIDTH / videoAspect;
+    // Altura del cilindro según aspect del video:
+    // ancho del video sobre la etiqueta = ARC_LENGTH → height = ARC_LENGTH / aspect
+    let cylHeight = ARC_LENGTH / videoAspect;
 
-    // Video (encima)
-    videoNode = document.createElement("a-video");
-    videoNode.setAttribute("src", "#ar-video");
-    videoNode.setAttribute("width", VIDEO_WIDTH.toString());
-    videoNode.setAttribute("height", VIDEO_HEIGHT.toString());
-    videoNode.setAttribute("position", "0 0 0.02"); // un poco delante para evitar z-fight
+    // === Video curvo (cilindro abierto) ===
+    videoNode = document.createElement("a-entity");
+    videoNode.setAttribute(
+      "geometry",
+      `primitive: cylinder; radius: ${bottleRadius}; height: ${cylHeight}; thetaLength: ${ARC_DEG}; thetaStart: ${-ARC_DEG/2}; openEnded: true`
+    );
+    videoNode.setAttribute(
+      "material",
+      "src: #ar-video; side: double; transparent: true"
+    );
+    videoNode.setAttribute("position", "0 0 0.02");  // un poco delante para evitar z-fight
     videoNode.setAttribute("rotation", "0 0 0");
-    videoNode.setAttribute("loop", "true");
     videoNode.setAttribute("visible", "false");
     videoNode.setAttribute("animation__in", "property: scale; to: 1 1 1; dur: 220; easing: easeOutBack; startEvents: show");
     videoNode.setAttribute("animation__out", "property: scale; to: 0.98 0.98 0.98; dur: 140; easing: easeInQuad; startEvents: hide");
     videoNode.object3D.scale.set(0.98, 0.98, 0.98);
     content.appendChild(videoNode);
 
-    // Logo (debajo)
-    const spacing = 0.15;
-    const LOGO_WIDTH = VIDEO_WIDTH * 0.6;
-    const LOGO_HEIGHT = LOGO_WIDTH / (logoAspect || 1);
-    const logoY = - (VIDEO_HEIGHT / 2) - spacing - (LOGO_HEIGHT / 2);
+    // === Logo debajo (plano) ===
+    const spacing   = 0.12;                // espacio entre video y logo
+    const LOGO_ARC  = ARC_LENGTH * 0.6;    // logo algo más angosto que el video
+    const logoWidth = LOGO_ARC;            // mantenemos misma escala (a lo largo del arco)
+    const logoH     = logoWidth / (logoAspect || 1);
+    const logoY     = - (cylHeight / 2) - spacing - (logoH / 2);
 
     logoNode = document.createElement("a-plane");
     logoNode.setAttribute("material", "src: #logo-img; transparent: true; alphaTest: 0.01; side: double");
-    logoNode.setAttribute("width", LOGO_WIDTH.toString());
-    logoNode.setAttribute("height", LOGO_HEIGHT.toString());
+    logoNode.setAttribute("width", logoWidth.toString());
+    logoNode.setAttribute("height", logoH.toString());
     logoNode.setAttribute("position", `0 ${logoY} 0.01`);
     logoNode.setAttribute("rotation", "0 0 0");
     logoNode.setAttribute("visible", "false");
@@ -230,16 +189,19 @@ document.addEventListener("DOMContentLoaded", () => {
     logoNode.object3D.scale.set(0.98, 0.98, 0.98);
     content.appendChild(logoNode);
 
-    // Reajustes si cambian aspectos
+    // Recalcular altura del cilindro y posición del logo cuando tengamos aspect real
     videoEl?.addEventListener("loadedmetadata", () => {
-      const aspect = (videoEl.videoWidth && videoEl.videoHeight)
-        ? videoEl.videoWidth / videoEl.videoHeight
-        : videoAspect;
-      const newH = VIDEO_WIDTH / aspect;
-      videoNode.setAttribute("height", newH.toString());
+      if (!(videoEl.videoWidth && videoEl.videoHeight)) return;
+      const aspect   = videoEl.videoWidth / videoEl.videoHeight;
+      const newH     = ARC_LENGTH / aspect;
+      videoNode.setAttribute(
+        "geometry",
+        `primitive: cylinder; radius: ${bottleRadius}; height: ${newH}; thetaLength: ${ARC_DEG}; thetaStart: ${-ARC_DEG/2}; openEnded: true`
+      );
 
-      const newLogoH = LOGO_WIDTH / (logoAspect || 1);
+      const newLogoH = (LOGO_ARC / (logoAspect || 1));
       const newLogoY = - (newH / 2) - spacing - (newLogoH / 2);
+      logoNode.setAttribute("height", newLogoH.toString());
       logoNode.setAttribute("position", `0 ${newLogoY} 0.01`);
     });
 
@@ -247,10 +209,11 @@ document.addEventListener("DOMContentLoaded", () => {
       const aspect = (logoImg.naturalWidth && logoImg.naturalHeight)
         ? logoImg.naturalWidth / logoImg.naturalHeight
         : logoAspect;
-      const newLogoH = LOGO_WIDTH / aspect;
+      const newLogoH = (LOGO_ARC / aspect);
       logoNode.setAttribute("height", newLogoH.toString());
 
-      const vH = parseFloat(videoNode.getAttribute("height"));
+      const curGeom = videoNode.getAttribute("geometry");
+      const vH = curGeom && curGeom.height ? parseFloat(curGeom.height) : (ARC_LENGTH / videoAspect);
       const newLogoY = - (vH / 2) - spacing - (newLogoH / 2);
       logoNode.setAttribute("position", `0 ${newLogoY} 0.01`);
     });
@@ -263,7 +226,7 @@ document.addEventListener("DOMContentLoaded", () => {
     markerInfo.innerText = "Marcador: 0";
     ensureNodes();
 
-    // Snap inmediato (y luego suaviza)
+    // Snap inmediato en la próxima tick
     content.components['smooth-follow']?.resetSnap?.();
 
     content.setAttribute("visible", "true");
@@ -272,7 +235,7 @@ document.addEventListener("DOMContentLoaded", () => {
     videoNode.emit("show");
     logoNode.emit("show");
 
-    // videoEl.currentTime = 0; // quita esta línea si prefieres reanudar en targetFound
+    // videoEl.currentTime = 0; // quítalo si prefieres reanudar
     intentarReproducirVideo();
   });
 
