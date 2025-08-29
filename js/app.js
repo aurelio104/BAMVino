@@ -110,7 +110,7 @@ document.addEventListener("DOMContentLoaded", () => {
       // Crear nodos una sola vez
       if (!videoNode) {
         // Tamaños base (en metros)
-        const VIDEO_WIDTH = 1.0; // ajusta a gusto
+        const VIDEO_WIDTH = 3.0; // ajusta a gusto
         const VIDEO_HEIGHT = VIDEO_WIDTH / videoAspect;
 
         videoNode = document.createElement("a-video");
